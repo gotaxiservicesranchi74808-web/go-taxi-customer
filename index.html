@@ -21,10 +21,6 @@ button{background:#ff9800;color:#fff;border:none;cursor:pointer}
 .price{font-size:20px;font-weight:bold;margin-top:8px}
 .hidden{display:none}
 .btn2{background:#333}
-@media(max-width:600px){
-  header{font-size:16px}
-  .box{margin:8px}
-}
 </style>
 </head>
 
@@ -34,7 +30,6 @@ button{background:#ff9800;color:#fff;border:none;cursor:pointer}
 
 <div class="box">
 
-<!-- STEP 1 -->
 <h3>Customer Details</h3>
 <label>Full Name</label>
 <input id="name">
@@ -42,22 +37,14 @@ button{background:#ff9800;color:#fff;border:none;cursor:pointer}
 <input id="mobile">
 <label>Email (optional)</label>
 <input id="email">
-
 <button onclick="goStep2()">Continue</button>
 
-<!-- STEP 2 -->
 <div id="step2" class="hidden">
 <h3>Trip Details</h3>
 
 <div class="row">
-  <div>
-    <label>Pickup Date</label>
-    <input type="date" id="date">
-  </div>
-  <div>
-    <label>Pickup Time</label>
-    <input type="time" id="time">
-  </div>
+  <div><label>Pickup Date</label><input type="date" id="date"></div>
+  <div><label>Pickup Time</label><input type="time" id="time"></div>
 </div>
 
 <label>Pickup Location</label>
@@ -69,22 +56,16 @@ button{background:#ff9800;color:#fff;border:none;cursor:pointer}
 <button onclick="seePrice()">See Price</button>
 </div>
 
-<!-- STEP 3 -->
 <div id="priceBox" class="hidden">
 <h3>Fare Details</h3>
 <div id="fareDetails"></div>
 
 <div class="row">
-  <div>
-    <button onclick="openGST()">Book With GST</button>
-  </div>
-  <div>
-    <button class="btn2" onclick="payWithoutGST()">Book Without GST</button>
-  </div>
+  <div><button onclick="openGST()">Book With GST</button></div>
+  <div><button class="btn2" onclick="payWithoutGST()">Book Without GST</button></div>
 </div>
 </div>
 
-<!-- GST FORM -->
 <div id="gstBox" class="hidden">
 <h3>Company Details (GST Invoice)</h3>
 <label>Company Name</label>
@@ -96,124 +77,76 @@ button{background:#ff9800;color:#fff;border:none;cursor:pointer}
 <button onclick="payWithGST()">Proceed to Payment</button>
 </div>
 
-<!-- DONE -->
 <div id="done" class="hidden">
 <h3>Thank You 🙏</h3>
 <p>Your booking request has been submitted.</p>
-<p class="small">
-Our team will contact you shortly.<br>
-📞 8434143546 / 7480877981<br>
-🌐 www.gotaxiservices.com
-</p>
+<p class="small">📞 8434143546 / 7480877981</p>
 </div>
 
 </div>
 
 <script>
-let routes = [];
-let selectedRoute = null;
-let finalAmount = 0;
+const API_URL = "https://script.google.com/macros/s/AKfycbz21aoltDs9MLdIxndoMLO0tnWyNsz1EoJNmrXlV_OVAxw-r5iC6CjT6wotUuyxqvG1/exec";
 
-/* LOAD ROUTES FROM ADMIN (NO FALLBACK) */
+let routes=[], selectedRoute=null, finalAmount=0;
+
 function loadRoutes(){
-  const raw = localStorage.getItem("oneWayRoutes");
-  if(!raw){
-    alert("No One Way routes found. Please open Admin panel and save routes on this device.");
-    return;
-  }
+  fetch(API_URL)
+  .then(r=>r.json())
+  .then(data=>{
+    routes=data;
+    pickup.innerHTML="<option value=''>Select Pickup</option>";
+    drop.innerHTML="<option value=''>Select Drop</option>";
 
-  routes = JSON.parse(raw);
+    [...new Set(routes.map(r=>r.pickup))].forEach(p=>{
+      pickup.add(new Option(p,p));
+    });
 
-  pickup.innerHTML = "<option value=''>Select Pickup</option>";
-  drop.innerHTML   = "<option value=''>Select Drop</option>";
-
-  const pickups = [...new Set(routes.map(r => r.pickup))];
-  pickups.forEach(p => pickup.add(new Option(p,p)));
-
-  pickup.onchange = loadDrops;
+    pickup.onchange=()=>{
+      drop.innerHTML="<option value=''>Select Drop</option>";
+      routes.filter(r=>r.pickup===pickup.value)
+            .forEach(r=>drop.add(new Option(r.drop,r.drop)));
+    };
+  });
 }
 
-/* DROPS */
-function loadDrops(){
-  drop.innerHTML = "<option value=''>Select Drop</option>";
-  routes
-    .filter(r => r.pickup === pickup.value)
-    .forEach(r => drop.add(new Option(r.drop, r.drop)));
-}
+function goStep2(){step2.classList.remove("hidden");}
 
-/* STEP FLOW */
-function goStep2(){
-  document.getElementById("step2").classList.remove("hidden");
-}
-
-/* PRICE */
 function seePrice(){
-  selectedRoute = routes.find(r =>
-    r.pickup === pickup.value && r.drop === drop.value
-  );
+  selectedRoute=routes.find(r=>r.pickup===pickup.value && r.drop===drop.value);
+  if(!selectedRoute){alert("Route not available");return;}
 
-  if(!selectedRoute){
-    alert("This route is not available for One Way.");
-    return;
-  }
+  const base=Number(selectedRoute.price);
+  const gst=Math.round(base*0.05);
+  finalAmount=base+gst;
 
-  const base = Number(selectedRoute.price);
-  const gst  = Math.round(base * 0.05);
-  finalAmount = base + gst;
-
-  fareDetails.innerHTML = `
-    <div class="card">
-      <b>${selectedRoute.pickup} → ${selectedRoute.drop}</b><br><br>
-      <b>KM Limit:</b> ${Number(selectedRoute.km)} KM<br>
-      <b>Base Fare:</b> ₹${base}<br>
-      <b>Extra KM:</b> ₹${selectedRoute.extra} / KM<br><br>
-      <b>Toll:</b> ${selectedRoute.toll}<br>
-      <b>Parking:</b> ${selectedRoute.parking}<br>
-      <b>State Tax:</b> ${selectedRoute.state}<br><br>
-      <div class="price">₹${finalAmount} (with GST)</div>
-      <div class="small">₹${base} (without GST)</div>
-    </div>
-  `;
+  fareDetails.innerHTML=`
+  <div class="card">
+  <b>${selectedRoute.pickup} → ${selectedRoute.drop}</b><br><br>
+  Base Fare ₹${base}<br>
+  Extra KM ₹${selectedRoute.extra}<br><br>
+  <div class="price">₹${finalAmount} (with GST)</div>
+  <div class="small">₹${base} (without GST)</div>
+  </div>`;
   priceBox.classList.remove("hidden");
 }
 
-/* GST FLOW */
-function openGST(){
-  gstBox.classList.remove("hidden");
+function openGST(){gstBox.classList.remove("hidden");}
+
+function razorpayPay(amount,name){
+  new Razorpay({
+    key:"rzp_test_S5hF2aCSZUMWAI",
+    amount:amount*100,
+    currency:"INR",
+    name:"Go Taxi Services",
+    handler:()=>{priceBox.classList.add("hidden");done.classList.remove("hidden");},
+    prefill:{name,email:email.value,contact:mobile.value}
+  }).open();
 }
 
-/* PAYMENTS */
-function payWithoutGST(){
-  razorpayPay(Number(selectedRoute.price), name.value || "Customer");
-}
-function payWithGST(){
-  razorpayPay(finalAmount, cname.value || "Company");
-}
+function payWithoutGST(){razorpayPay(Number(selectedRoute.price),name.value||"Customer");}
+function payWithGST(){razorpayPay(finalAmount,cname.value||"Company");}
 
-/* RAZORPAY (NO ×100 BUG) */
-function razorpayPay(amount, payer){
-  const options = {
-    key: "rzp_test_S5hF2aCSZUMWAI",
-    amount: Math.round(amount * 100), // ONLY HERE
-    currency: "INR",
-    name: "Go Taxi Services",
-    description: "One Way Booking",
-    handler: function (){
-      priceBox.classList.add("hidden");
-      gstBox.classList.add("hidden");
-      done.classList.remove("hidden");
-    },
-    prefill: {
-      name: payer,
-      email: email.value,
-      contact: mobile.value
-    },
-    theme:{color:"#ff9800"}
-  };
-  new Razorpay(options).open();
-}
-
-/* INIT */
 loadRoutes();
 </script>
 

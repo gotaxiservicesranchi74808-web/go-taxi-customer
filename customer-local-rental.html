@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Go Taxi – Local Rental Booking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{margin:0;font-family:Arial;background:#f4f6f8}
+header{background:#ff9800;color:#fff;padding:15px;text-align:center}
+.box{max-width:900px;margin:15px auto;background:#fff;padding:15px;border-radius:6px}
+label{font-weight:bold;display:block;margin-top:12px}
+select,input,button{width:100%;padding:10px;margin-top:6px;font-size:16px}
+button{background:#ff9800;color:#fff;border:none;cursor:pointer;margin-top:15px}
+.card{border:1px solid #ddd;padding:15px;margin-top:15px;border-radius:5px}
+.price{font-size:20px;font-weight:bold;margin-top:10px}
+.small{font-size:13px;color:#555}
+</style>
+</head>
+
+<body>
+
+<header>Go Taxi – Local Rental</header>
+
+<div class="box">
+
+<label>Cab Type</label>
+<select id="car"></select>
+
+<label>Package</label>
+<select id="pkg"></select>
+
+<label>Extra Hours</label>
+<input type="number" id="extraHour" value="0" min="0">
+
+<label>Extra KM</label>
+<input type="number" id="extraKm" value="0" min="0">
+
+<button onclick="calculate()">Calculate Fare</button>
+
+<div id="output"></div>
+
+</div>
+
+<script>
+const API =
+"https://script.google.com/macros/s/AKfycbxc0ChVG8MU357_XycBnH9ntdgk4n-BrV_aFLPli57H_-WkzJplzM4ai6TMBjtB6tUE/exec";
+
+let DATA = [];
+
+/* LOAD DATA FROM SHEET */
+fetch(API)
+.then(res => res.json())
+.then(json => {
+  DATA = json;
+  loadCars();
+})
+.catch(() => alert("Data load failed"));
+
+/* LOAD CAB TYPES */
+function loadCars(){
+  car.innerHTML = "<option value=''>Select Cab</option>";
+  [...new Set(DATA.map(r => r.car_type))].forEach(c => {
+    car.add(new Option(c.toUpperCase(), c));
+  });
+  car.onchange = loadPackages;
+}
+
+/* LOAD PACKAGES */
+function loadPackages(){
+  pkg.innerHTML = "<option value=''>Select Package</option>";
+  DATA.filter(r => r.car_type === car.value)
+      .forEach(r => {
+        pkg.add(new Option(
+          r.package_hours + " / " + r.package_km,
+          r.package_hours
+        ));
+      });
+}
+
+/* CALCULATE FARE */
+function calculate(){
+  const row = DATA.find(r =>
+    r.car_type === car.value &&
+    r.package_hours === pkg.value
+  );
+
+  if(!row){
+    alert("Please select Cab and Package");
+    return;
+  }
+
+  const baseFare = row.package_fare;
+  const extraHourCharge = Number(extraHour.value) * row.extra_hour_rate;
+  const extraKmCharge   = Number(extraKm.value) * row.extra_km_rate;
+
+  const subtotal = baseFare + extraHourCharge + extraKmCharge;
+  const gst = Math.round(subtotal * row.gst / 100);
+  const total = subtotal + gst;
+
+  output.innerHTML = `
+  <div class="card">
+    <b>${car.value.toUpperCase()} – ${row.package_hours} / ${row.package_km}</b><br><br>
+
+    Package Fare: ₹${baseFare}<br>
+    Extra Hour (${row.extra_hour_rate}/hr): ₹${extraHourCharge}<br>
+    Extra KM (${row.extra_km_rate}/km): ₹${extraKmCharge}<br><br>
+
+    <b>Total (Without GST): ₹${subtotal}</b><br>
+    GST (${row.gst}%): ₹${gst}<br>
+
+    <div class="price">Final Amount: ₹${total}</div>
+    <div class="small">Toll / Parking / State Tax extra</div>
+  </div>
+  `;
+}
+</script>
+
+</body>
+</html>

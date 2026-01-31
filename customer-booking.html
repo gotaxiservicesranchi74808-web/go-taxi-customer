@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Go Taxi – Booking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<style>
+body{margin:0;font-family:Arial;background:#f4f6f8}
+header{background:#ff9800;color:#fff;padding:15px;text-align:center;font-size:18px}
+.box{max-width:950px;margin:20px auto;background:#fff;padding:20px;border-radius:6px}
+label{font-weight:bold;display:block;margin-top:12px}
+input,select,button{width:100%;padding:10px;margin-top:6px;font-size:16px}
+button{background:#ff9800;color:#fff;border:none;margin-top:15px;cursor:pointer}
+.hidden{display:none}
+.card{border:1px solid #ddd;padding:15px;margin-top:20px;border-radius:5px}
+.price{font-size:20px;font-weight:bold;margin-top:10px}
+.small{font-size:13px;color:#555}
+.btn2{background:#333}
+hr{margin:12px 0}
+</style>
+</head>
+
+<body>
+
+<header>Go Taxi – Customer Booking</header>
+
+<div class="box">
+
+<!-- ================= CUSTOMER DETAILS ================= -->
+<h3>Customer Details</h3>
+<label>Name</label>
+<input id="custName">
+<label>Mobile</label>
+<input id="custMobile">
+<label>Email</label>
+<input id="custEmail">
+
+<hr>
+
+<!-- ================= BOOKING TYPE ================= -->
+<h3>Select Booking Type</h3>
+<select id="bookingType" onchange="switchType()">
+  <option value="">Select</option>
+  <option value="oneway">One Way</option>
+  <option value="round">Round Trip</option>
+  <option value="local">Local Rental</option>
+</select>
+
+<!-- ================= COMMON TRIP DETAILS ================= -->
+<div id="commonBox" class="hidden">
+  <label>Pickup Date</label>
+  <input type="date" id="pickupDate">
+
+  <label>Pickup Time</label>
+  <input type="time" id="pickupTime">
+
+  <label>Release Date</label>
+  <input type="date" id="releaseDate">
+
+  <label>Release Time</label>
+  <input type="time" id="releaseTime">
+
+  <label>Pickup Location</label>
+  <input id="pickupLocation">
+</div>
+
+<!-- ================= ONE WAY ================= -->
+<div id="onewayBox" class="hidden">
+  <label>Drop Location</label>
+  <input id="onewayDrop">
+  <p class="small">
+    Toll / Parking / State Tax <b>Included</b>
+  </p>
+</div>
+
+<!-- ================= ROUND TRIP ================= -->
+<div id="roundBox" class="hidden">
+  <label>Going On Location (Optional)</label>
+  <input id="roundGoing">
+
+  <label>Total KM (Customer Input)</label>
+  <input type="number" id="roundKm">
+
+  <p class="small">
+    Minimum 250 KM / Day applicable<br>
+    Toll / Parking / State Tax <b>Excluded</b>
+  </p>
+</div>
+
+<!-- ================= LOCAL RENTAL ================= -->
+<div id="localBox" class="hidden">
+  <label>Cab Type</label>
+  <select id="localCab">
+    <option>Sedan</option>
+    <option>SUV</option>
+    <option>Innova</option>
+    <option>Innova Crysta</option>
+  </select>
+
+  <label>Package</label>
+  <select id="localPackage">
+    <option>8H / 80KM</option>
+    <option>10H / 100KM</option>
+  </select>
+
+  <p class="small">
+    Extra Hour / Extra KM charges as per company rate<br>
+    Toll / Parking / State Tax <b>Excluded</b>
+  </p>
+</div>
+
+<button onclick="showFare()">Show Fare</button>
+
+<!-- ================= FARE BOX ================= -->
+<div id="fareBox"></div>
+
+<!-- ================= GST BOX ================= -->
+<div id="gstBox" class="hidden">
+  <h4>Company Details (GST)</h4>
+  <label>Company Name</label>
+  <input id="gstCompany">
+  <label>Company Address</label>
+  <input id="gstAddress">
+  <label>GST Number</label>
+  <input id="gstNumber">
+  <button onclick="payWithGST()">Pay With GST</button>
+</div>
+
+</div>
+
+<script>
+const GST_RATE = 5;
+const WHATSAPP_NO = "8434143546";
+
+/* SWITCH BOOKING TYPE */
+function switchType(){
+  commonBox.classList.add("hidden");
+  onewayBox.classList.add("hidden");
+  roundBox.classList.add("hidden");
+  localBox.classList.add("hidden");
+
+  if(!bookingType.value) return;
+
+  commonBox.classList.remove("hidden");
+
+  if(bookingType.value==="oneway") onewayBox.classList.remove("hidden");
+  if(bookingType.value==="round") roundBox.classList.remove("hidden");
+  if(bookingType.value==="local") localBox.classList.remove("hidden");
+}
+
+/* SHOW FARE (DEMO LOGIC – FINAL RATE CONNECT LATER) */
+let BASE_AMOUNT = 0;
+
+function showFare(){
+  if(!custName.value || !custMobile.value){
+    alert("Enter customer details");
+    return;
+  }
+
+  if(bookingType.value==="oneway"){
+    BASE_AMOUNT = 2500;
+  }
+  if(bookingType.value==="round"){
+    const km = Number(roundKm.value);
+    if(!km){ alert("Enter KM"); return; }
+    BASE_AMOUNT = km * 12; // demo
+  }
+  if(bookingType.value==="local"){
+    BASE_AMOUNT = 1800;
+  }
+
+  const gst = Math.round(BASE_AMOUNT * GST_RATE / 100);
+  const total = BASE_AMOUNT + gst;
+
+  fareBox.innerHTML = `
+  <div class="card">
+    <b>Fare Summary</b><br><br>
+    Base Fare: ₹${BASE_AMOUNT}<br>
+    GST (${GST_RATE}%): ₹${gst}<br>
+    <div class="price">With GST: ₹${total}</div>
+    <hr>
+    <button onclick="payWithoutGST()">Book Without GST</button>
+    <button class="btn2" onclick="openGST()">Book With GST</button>
+  </div>
+  `;
+}
+
+/* PAYMENT */
+function openGST(){
+  gstBox.classList.remove("hidden");
+}
+function payWithoutGST(){
+  razorpay(BASE_AMOUNT,"Customer");
+}
+function payWithGST(){
+  if(!gstCompany.value || !gstAddress.value || !gstNumber.value){
+    alert("GST details required");
+    return;
+  }
+  const gst = Math.round(BASE_AMOUNT * GST_RATE / 100);
+  razorpay(BASE_AMOUNT+gst, gstCompany.value);
+}
+function razorpay(amount,name){
+  const options={
+    key:"rzp_test_S5hF2aCSZUMWAI",
+    amount:amount*100,
+    currency:"INR",
+    name:"Go Taxi Services",
+    description:"Booking Payment",
+    handler:function(){
+      sendWhatsapp(amount);
+      alert("Payment Successful");
+    },
+    prefill:{
+      name:name,
+      contact:custMobile.value,
+      email:custEmail.value
+    }
+  };
+  new Razorpay(options).open();
+}
+
+/* WHATSAPP */
+function sendWhatsapp(amount){
+  const msg =
+`New Booking
+Name: ${custName.value}
+Mobile: ${custMobile.value}
+Type: ${bookingType.value}
+Amount: ₹${amount}`;
+  window.open("https://wa.me/91"+WHATSAPP_NO+"?text="+encodeURIComponent(msg));
+}
+</script>
+
+</body>
+</html>

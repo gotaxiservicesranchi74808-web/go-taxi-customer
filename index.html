@@ -1,10 +1,253 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta http-equiv="refresh" content="0; url=customer-booking.html">
-  <title>Go Taxi</title>
+<meta charset="UTF-8">
+<title>Go Taxi – Customer Booking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<style>
+body{margin:0;font-family:Arial;background:#f4f6f8}
+header{background:#ff9800;color:#fff;padding:15px;text-align:center;font-size:20px}
+.box{max-width:950px;margin:15px auto;background:#fff;padding:15px;border-radius:6px}
+label{font-weight:bold;display:block;margin-top:12px}
+input,select,button{width:100%;padding:10px;margin-top:6px;font-size:16px}
+button{background:#ff9800;color:#fff;border:none;cursor:pointer;margin-top:10px}
+.hidden{display:none}
+.card{border:1px solid #ddd;padding:15px;margin-top:15px;border-radius:5px}
+.price{font-size:20px;font-weight:bold}
+small{color:#555}
+.flex{display:flex;gap:10px}
+.flex button{flex:1}
+</style>
 </head>
+
 <body>
-Redirecting to booking...
+<header>Go Taxi – Customer Booking</header>
+
+<div class="box">
+
+<h3>Customer Details</h3>
+<input id="cname" placeholder="Full Name">
+<input id="cmobile" placeholder="Mobile Number">
+<input id="cemail" placeholder="Email (optional)">
+<button onclick="goStep2()">Continue</button>
+
+<div id="step2" class="hidden">
+<h3>Select Booking Type</h3>
+<select id="bookingType" onchange="showType()">
+<option value="">Select</option>
+<option value="oneway">One Way</option>
+<option value="round">Round Trip</option>
+<option value="local">Local Rental</option>
+</select>
+</div>
+
+<!-- ONE WAY -->
+<div id="oneway" class="hidden">
+<h3>One Way</h3>
+
+<label>Pickup Date</label>
+<input type="date" id="ow_date">
+<label>Pickup Time</label>
+<input type="time" id="ow_time">
+
+<label>Cab Type</label>
+<select id="ow_car">
+<option>Sedan</option>
+<option>SUV</option>
+</select>
+
+<label>Pickup Location</label>
+<select id="ow_pickup"><option value="">Select Pickup</option></select>
+
+<label>Drop Location</label>
+<select id="ow_drop"><option value="">Select Drop</option></select>
+
+<button onclick="calcOneWay()">Show Fare</button>
+<div id="ow_result"></div>
+</div>
+
+<!-- ROUND TRIP -->
+<div id="round" class="hidden">
+<h3>Round Trip</h3>
+
+<label>Pickup Date</label>
+<input type="date" id="rt_pdate">
+<label>Pickup Time</label>
+<input type="time" id="rt_ptime">
+
+<label>Release Date</label>
+<input type="date" id="rt_rdate">
+<label>Release Time</label>
+<input type="time" id="rt_rtime">
+
+<input id="rt_pickup" placeholder="Pickup Location">
+<input id="rt_via" placeholder="Going On (optional)">
+<input id="rt_drop" placeholder="Drop Location">
+<input type="number" id="rt_km" placeholder="Total KM">
+
+<label>Cab Type</label>
+<select id="rt_car"></select>
+
+<button onclick="calcRound()">Show Fare</button>
+<div id="rt_result"></div>
+</div>
+
+<!-- LOCAL -->
+<div id="local" class="hidden">
+<h3>Local Rental</h3>
+
+<input id="lr_pickup" placeholder="Pickup Location">
+<input type="date" id="lr_date">
+<input type="time" id="lr_time">
+<input id="lr_drop" placeholder="Drop Location (same as pickup)">
+
+<select id="lr_car"></select>
+<select id="lr_package"></select>
+
+<button onclick="calcLocal()">Show Fare</button>
+<div id="lr_result"></div>
+</div>
+
+</div>
+
+<div id="paymentBox" class="box hidden">
+<h3>Payment</h3>
+<div class="card">
+<b>Payable Amount</b>
+<div class="price" id="payAmount"></div>
+
+<select id="payPercent">
+<option value="1">100% Payment</option>
+<option value="0.5">50% Advance</option>
+<option value="0.25">25% Advance</option>
+</select>
+</div>
+
+<div id="gstBox" class="hidden">
+<input id="gst_company" placeholder="Company Name">
+<input id="gst_address" placeholder="Company Address">
+<input id="gst_no" placeholder="GST Number">
+</div>
+
+<button onclick="payNow()">Pay Now</button>
+<p style="text-align:center">UPI: <b>8434143546@upi</b></p>
+</div>
+
+<script>
+const ONE_WAY_API="https://script.google.com/macros/s/AKfycbz21aoltDs9MLdIxndoMLO0tnWyNsz1EoJNmrXlV_OVAxw-r5iC6CjT6wotUuyxqvG1/exec";
+const ROUND_API="https://script.google.com/macros/s/AKfycbyXk3kPPx3OR-d-hFgnk6rUeUtxRVtCwQCzBxlz55JLB9BCiofJjNF_qor3l_Np4sk/exec";
+const LOCAL_API="https://script.google.com/macros/s/AKfycbxly09CnZvjYdn8i_zVDiov_9sBmyebtOn2H4K-n2DhwL_IAP8ucI3R2vihgR8JXHZL/exec";
+
+let oneWay=[],roundRates=[],localRates=[];
+let FINAL_AMOUNT=0,GST_MODE="nogst";
+
+function goStep2(){
+ if(!cname.value||!cmobile.value){alert("Enter name & mobile");return;}
+ step2.classList.remove("hidden");
+}
+function showType(){
+ oneway.classList.add("hidden");
+ round.classList.add("hidden");
+ local.classList.add("hidden");
+ document.getElementById(bookingType.value).classList.remove("hidden");
+}
+
+/* ONE WAY LOAD */
+fetch(ONE_WAY_API).then(r=>r.json()).then(d=>{
+ oneWay=d;
+ [...new Set(d.map(x=>x.pickup))].forEach(p=>ow_pickup.add(new Option(p,p)));
+});
+ow_pickup.onchange=()=>{
+ ow_drop.innerHTML="<option value=''>Select Drop</option>";
+ oneWay.filter(x=>x.pickup===ow_pickup.value)
+ .forEach(x=>ow_drop.add(new Option(x.drop,x.drop)));
+};
+function calcOneWay(){
+ if(ow_pickup.value===ow_drop.value){alert("Pickup & Drop cannot be same");return;}
+ const r=oneWay.find(x=>x.pickup===ow_pickup.value&&x.drop===ow_drop.value);
+ const gst=Math.round(r.price*0.05);
+ ow_result.innerHTML=`
+ <div class="card">
+ Fare ₹${r.price} <small>(Toll/Parking/State Included)</small>
+ <div class="flex">
+ <button onclick="openPay(${r.price},'nogst')">Without GST</button>
+ <button onclick="openPay(${r.price+gst},'gst')">With GST</button>
+ </div></div>`;
+}
+
+/* ROUND */
+fetch(ROUND_API).then(r=>r.json()).then(d=>{
+ roundRates=d;
+ d.forEach(x=>rt_car.add(new Option(x.car_type,x.car_type)));
+});
+function calcRound(){
+ const rate=roundRates.find(x=>x.car_type===rt_car.value);
+ const s=new Date(rt_pdate.value+"T"+rt_ptime.value);
+ const e=new Date(rt_rdate.value+"T"+rt_rtime.value);
+ let days=Math.ceil((e-s)/(1000*60*60*24)); if(days<1)days=1;
+ const km=Math.max(rt_km.value,days*250);
+ const sub=(rate.base_fare*days)+(km*rate.per_km_rate)+(rate.driver_allowance*days)+((days-1>0)?(days-1)*rate.night_charge:0);
+ const gst=sub*(rate.gst/100);
+ rt_result.innerHTML=`
+ <div class="card">
+ Without GST ₹${sub}<br>
+ With GST ₹${sub+gst}
+ <small>
+ • Driver allowance included<br>
+ • Night halt applicable<br>
+ • 250 KM/day minimum<br>
+ • Toll/Parking/State extra<br>
+ • Valid till 11:59 PM
+ </small>
+ <div class="flex">
+ <button onclick="openPay(${sub},'nogst')">Without GST</button>
+ <button onclick="openPay(${sub+gst},'gst')">With GST</button>
+ </div></div>`;
+}
+
+/* LOCAL */
+fetch(LOCAL_API).then(r=>r.json()).then(d=>{
+ localRates=d;
+ [...new Set(d.map(x=>x.car))].forEach(c=>lr_car.add(new Option(c,c)));
+});
+lr_car.onchange=()=>{
+ lr_package.innerHTML="";
+ localRates.filter(x=>x.car===lr_car.value)
+ .forEach(x=>lr_package.add(new Option(`${x.hours}/${x.km}`,JSON.stringify(x))));
+};
+function calcLocal(){
+ const r=JSON.parse(lr_package.value);
+ const gst=r.fare*(r.gst/100);
+ lr_result.innerHTML=`
+ <div class="card">
+ Package ₹${r.fare}
+ <div class="flex">
+ <button onclick="openPay(${r.fare},'nogst')">Without GST</button>
+ <button onclick="openPay(${r.fare+gst},'gst')">With GST</button>
+ </div></div>`;
+}
+
+/* PAYMENT */
+function openPay(a,m){
+ FINAL_AMOUNT=a;
+ GST_MODE=m;
+ paymentBox.classList.remove("hidden");
+ gstBox.classList.toggle("hidden",m!=="gst");
+ payAmount.innerText="₹"+a;
+}
+function payNow(){
+ const p=Number(payPercent.value);
+ const amt=Math.round(FINAL_AMOUNT*p);
+ new Razorpay({
+  key:"rzp_test_xxxxxxxx",
+  amount:amt*100,
+  currency:"INR",
+  name:"Go Taxi Services",
+  handler:()=>alert("Payment Successful")
+ }).open();
+}
+</script>
 </body>
 </html>
